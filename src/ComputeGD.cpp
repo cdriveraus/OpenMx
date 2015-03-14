@@ -26,7 +26,7 @@
 #include "glue.h"
 #include "ComputeSD.h"
 #include "ComputeSD_AL.h"
-
+#include "ComputeSD_AL_LS.h"
 enum OptEngine {
 	OptEngine_NPSOL,
 	OptEngine_CSOLNP,
@@ -198,6 +198,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
 
 	switch (engine) {
         case OptEngine_NPSOL:{
+
 #if HAS_NPSOL
 		omxNPSOL(fc->est, rf);
 		if (!hessChol) {
@@ -209,10 +210,8 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		dest.noalias() = rf.hessOut.transpose() * rf.hessOut;
 #endif
 		break;}
-        case OptEngine_CSOLNP:
-		//omxCSOLNP(fc->est, rf);
 
-//		steepDES(rf, 100000);
+        case OptEngine_CSOLNP:
 
         rf.fc->copyParamToModel();
         rf.setupSimpleBounds();
@@ -225,7 +224,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
         {
             steepDES(rf, 100000);
         } else {
-            auglag_minimize_SD(rf);
+            auglag_minimize_SD_LS(rf);
         }
 
 
@@ -235,7 +234,9 @@ void omxComputeGD::computeImpl(FitContext *fc)
 			Eigen::Map< Eigen::MatrixXd > hess(fc->getDenseHessUninitialized(), numParam, numParam);
 			hess = rf.hessOut.bottomRightCorner(numParam, numParam);
 		}
+
 		break;
+
 #ifdef HAS_NLOPT
         case OptEngine_NLOPT:
 		omxInvokeNLOPT(fc->est, rf);

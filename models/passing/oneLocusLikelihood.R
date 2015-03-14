@@ -15,6 +15,9 @@
 
 require(OpenMx)
 
+#mxOption(NULL, "Default optimizer", "NPSOL")
+#mxOption(NULL, "Major iterations", 10)
+mxOption(NULL, "Default optimizer", "CSOLNP")
 #Single locus Likelihood example
 #Author: Mike Neale
 #Date: Nov 23 2009
@@ -43,8 +46,10 @@ run$algebras
 
 
 # Compare OpenMx estimates to original Mx's estimates
-estimates<-c(run$matrices$P$values,run$matrices$Q$values,run$matrices$R$values,run$algebras$NegativeLogLikelihood$result)
-Mx1Estimates<-c(0.2945,0.1540,0.5515,627.104)
+estimates<-c(run$matrices$P$values,run$matrices$Q$values,run$matrices$R$values)
+likelihood<-c(run$algebras$NegativeLogLikelihood$result)
+Mx1Estimates<-c(0.2945,0.1540,0.5516)
+Mx1Likelihood<-c(627.03)
 omxCheckCloseEnough(estimates,Mx1Estimates,.01)
-
+omxCheckCloseEnough(likelihood,Mx1Likelihood,.1)
 

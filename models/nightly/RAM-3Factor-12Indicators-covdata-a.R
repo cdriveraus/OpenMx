@@ -16,7 +16,7 @@
 # Read libraries and set options.
 
 library(OpenMx)
-
+mxOption(NULL, "Default optimizer", "CSOLNP")
 options(width=100)
 set.seed(10)
 

@@ -1,9 +1,10 @@
 #include "ComputeSD_AL.h"
 
+/*
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define ABS(a) ((a) >= 0 ? (a) : (-a))
-
+*/
 double auglagSD(GradientOptimizerContext &rf, double rho, double *lambda, double *mu)
 {
     rf.fc->copyParamToModel();
@@ -20,7 +21,7 @@ double auglagSD(GradientOptimizerContext &rf, double rho, double *lambda, double
 
     for (size_t i = 0; i < rf.inequality.size(); ++i)
     {
-        augFit += 0.5 * rho * MAX(0,(rf.inequality[i] + mu[i] / rho)) * MAX(0,(rf.inequality[i] + mu[i] / rho));
+        augFit += 0.5 * rho * std::max(0.0,(rf.inequality[i] + mu[i] / rho)) * std::max(0.0,(rf.inequality[i] + mu[i] / rho));
     }
     return augFit;
 }
@@ -90,14 +91,14 @@ bool FitCompare(GradientOptimizerContext &rf, double speed, double rho, double *
 void steepDES(GradientOptimizerContext &rf, int maxIter, double rho, double *lambda, double *mu)
 {
 	int iter = 0;
-	double priorSpeed = 1.0;
+	double priorSpeed = 1;
     rf.setupSimpleBounds();
     rf.informOut = INFORM_UNINITIALIZED;
     rf.fc->copyParamToModel();
 
     rf.fc->fit = auglagSD(rf, rho, lambda, mu);
 
-    SD_grad(rf, 1e-9, rho, lambda, mu);
+    SD_grad(rf, 1e-12, rho, lambda, mu);
 
 	while(iter < maxIter && !isErrorRaised())
 	{
@@ -116,17 +117,8 @@ void steepDES(GradientOptimizerContext &rf, int maxIter, double rho, double *lam
             findit = FitCompare(rf, speed, rho, lambda, mu);
         }
         if(findit){
-            priorSpeed = speed * 1.1;
+            //priorSpeed = speed * 1.1;
             iter++;
-            if (speed < 1e-9)
-            {
-                SD_grad(rf, speed * 1e-2);
-            //    mxLog("aha!");
-            }
-            else
-            {
-                SD_grad(rf, 1e-9);
-            }
             if(iter == maxIter){
                 rf.informOut = INFORM_ITERATION_LIMIT;
                 mxLog("Maximum iteration achieved!");
@@ -140,11 +132,12 @@ void steepDES(GradientOptimizerContext &rf, int maxIter, double rho, double *lam
                     if(rf.informOut == INFORM_STARTING_VALUES_INFEASIBLE)
                     {
                         mxLog("Infeasbile starting values!");
+                        break;
                     }
                     rf.informOut = INFORM_CONVERGED_OPTIMUM;
                     mxLog("after %i iterations, cannot find better estimation along the gradient direction", iter);
                     break;
-                case 99999:
+                case 599999:
                     rf.informOut = INFORM_ITERATION_LIMIT;
                     mxLog("Maximum iteration achieved!");
                     break;
@@ -185,11 +178,18 @@ void auglag_minimize_SD(GradientOptimizerContext &rf)
 
     for(size_t i = 0; i < ineq_size; i++)
     {
-      ineq_norm += MAX(0, rf.inequality[i]) * MAX(0, rf.inequality[i]);
+      ineq_norm += std::max(0.0, rf.inequality[i]) * std::max(0.0, rf.inequality[i]);
     }
 
-    double rho = MAX(1e-6, MIN(10, (2 * ABS(rf.fc->fit) / (eq_norm + ineq_norm))));
+    double rho = std::max(1e-6, std::min(10.0, (2 * std::abs(rf.fc->fit) / (eq_norm + ineq_norm))));
     double lambda[eq_size], mu[ineq_size];  // not double *lambda[eq_size], *mu[ineq_size]
+    for(size_t i = 0; i < eq_size; i++){
+        lambda[i] = 0;
+    }
+    for(size_t i = 0; i < ineq_size; i++){
+        mu[i] = 0;
+    }
+
 
     int iter = 0;
     Eigen::VectorXd V(ineq_size);
@@ -199,32 +199,28 @@ void auglag_minimize_SD(GradientOptimizerContext &rf)
         double prev_ICM = ICM;
         ICM = 0;
 
-     //   Eigen::VectorXd eq_old = rf.equality;
-       // Eigen::VectorXd V_old = V;
+        steepDES(rf, 600000, rho, lambda, mu);
 
-        steepDES(rf, 100000, rho, lambda, mu);
-
-        if(rf.informOut == INFORM_STARTING_VALUES_INFEASIBLE) return;
+//        if(rf.informOut == INFORM_STARTING_VALUES_INFEASIBLE) return;
 
         rf.fc->copyParamToModel();
         rf.solEqBFun();
         rf.myineqFun();
 
         for(size_t i = 0; i < eq_size; i++){
-            lambda[i] = MIN(MAX(lam_min, (lambda[i] + rho * rf.equality[i])), lam_max);
-            ICM = MAX(ICM, ABS(rf.equality[i]));
+            lambda[i] = std::min(std::max(lam_min, (lambda[i] + rho * rf.equality[i])), lam_max);
+            ICM = std::max(ICM, std::abs(rf.equality[i]));
         }
 
         for(size_t i = 0; i < ineq_size; i++){
-            mu[i] = MIN(MAX(0, (mu[i] + rho * rf.inequality[i])),mu_max);
+            mu[i] = std::min(std::max(0.0, (mu[i] + rho * rf.inequality[i])),mu_max);
         }
 
         for(size_t i = 0; i < ineq_size; i++){
-            V[i] = MAX(rf.inequality[i], (-mu[i] / rho));
-            ICM = MAX(ICM, ABS(V[i]));
+            V[i] = std::max(rf.inequality[i], (-mu[i] / rho));
+            ICM = std::max(ICM, std::abs(V[i]));
         }
 
-        //if(!(iter == 1 || MAX(rf.equality.maxCoeff(), V.maxCoeff()) > tau * MAX(eq_old.maxCoeff(), V_old.maxCoeff())))
         if(!(iter == 1 || ICM <= tau * prev_ICM))
         {
             rho *= gam;
